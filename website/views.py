@@ -1,6 +1,6 @@
 from flask import Blueprint, request
 import time
-from .models import user
+from .models import user, user_log
 from .db import AtlasClient
 from .utils import JSONEncoder
 from .auth import encode_token, decode_token
@@ -44,6 +44,15 @@ def login():
                     "logged_in": True,
                     "logged_in_date": time.time()
                 }})
+            newLog = user_log('login', userData['name'], time.time())
+            newLog.setContent(f'User ({userData['name']}) performed log-in successfully.')
+            colLog = client.get_collection('User_log')
+            colLog.insert_one({
+                "type": newLog.type,
+                "user_name": newLog.user_name,
+                "content": newLog.content,
+                "date": newLog.date
+            })
             return JSONEncoder().encode({ "key": encoded }), 200
         else:
             return JSONEncoder().encode({ "result": "Invalid Password" }), 401
@@ -85,6 +94,15 @@ def logout():
             "logged_in": False,
             "logged_in_date": None
         }})
+    newLog = user_log('logout', decoded['name'], time.time())
+    newLog.setContent(f'User ({decoded['name']}) performed log-out successfully.')
+    colLog = client.get_collection('User_log')
+    colLog.insert_one({
+        "type": newLog.type,
+        "user_name": newLog.user_name,
+        "content": newLog.content,
+        "date": newLog.date
+    })
     return JSONEncoder().encode({"result": "logged-out"}), 200
 
 @views.route('/sign-up', methods=['POST'])
@@ -103,13 +121,23 @@ def signup():
 
     newUser = user(data['name'], data['email'])
     newUser.setPassword(data['password1'])
+    newUser.setLogged_in(False, None)
     client = AtlasClient(config['dbUri'], config['dbName'])
     col = client.get_collection('User')
     col.insert_one({
         "name": newUser.name,
         "email": newUser.email,
         "password": newUser.password,
-        "logged_in": False,
-        "logged_in_date": None
+        "logged_in": newUser.logged_in,
+        "logged_in_date": newUser.logged_in_date
+    })
+    newLog = user_log('sign-up', newUser.name, time.time())
+    newLog.setContent(f'New User ({newUser.name}) signed-up.')
+    colLog = client.get_collection('User_log')
+    colLog.insert_one({
+        "type": newLog.type,
+        "user_name": newLog.user_name,
+        "content": newLog.content,
+        "date": newLog.date
     })
     return JSONEncoder().encode({"result": "Successfully signed-up"}), 200
